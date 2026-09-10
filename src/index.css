@@ -1,0 +1,483 @@
+:root {
+  --bg: #f4f4f0;
+  --ink: #1c1e21;
+  --ink-soft: #55585e;
+  --line: #d9d9d2;
+  --accent: #2f5d50;
+  --card: #ffffff;
+  --radius: 14px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+  overscroll-behavior: none;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---------- HUD overlay ---------- */
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px 28px;
+}
+
+.hud-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.hud-name {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+.hud-name span {
+  color: var(--accent);
+}
+
+.hud-nav {
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px;
+  backdrop-filter: blur(8px);
+}
+
+.hud-nav button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.hud-nav button:hover {
+  color: var(--ink);
+}
+
+.hud-nav button.active {
+  background: var(--ink);
+  color: #fff;
+}
+
+.hud-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.hud-hint {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.hud-scroll {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.hud-scroll-track {
+  width: 1px;
+  height: 44px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+
+.hud-scroll-thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 40%;
+  background: var(--accent);
+  animation: hudscroll 1.8s ease-in-out infinite;
+}
+
+@keyframes hudscroll {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(260%);
+  }
+}
+
+/* ---------- Panels ---------- */
+.panel {
+  position: absolute;
+  width: min(420px, 86vw);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 50px rgba(28, 30, 33, 0.08);
+  user-select: none;
+}
+
+.panel-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.panel h2 {
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+}
+
+.panel p {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+/* skills */
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 9px 0;
+}
+
+.skill-name {
+  width: 92px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.skill-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.skill-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+/* projects */
+.proj {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-top: 1px solid var(--line);
+  padding: 12px 2px;
+  transition: background 0.15s, padding-left 0.15s;
+}
+
+.proj:hover {
+  background: rgba(47, 93, 80, 0.06);
+  padding-left: 10px;
+  border-radius: 8px;
+}
+
+.proj-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.proj-name .arrow {
+  color: var(--accent);
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.proj:hover .arrow {
+  opacity: 1;
+}
+
+.proj-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin-top: 3px;
+}
+
+/* experience */
+.xp {
+  border-top: 1px solid var(--line);
+  padding: 12px 2px;
+}
+
+.xp:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.xp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.xp-role {
+  font-weight: 650;
+  font-size: 14.5px;
+}
+
+.xp-period {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.xp-place {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+  margin: 1px 0 4px;
+}
+
+.xp-detail {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.xp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.xp-tag {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 9px;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* ---------- Contact ---------- */
+.contact-panel {
+  width: min(460px, 88vw);
+}
+
+.contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.contact-link {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  padding: 9px 18px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.contact-link:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.contact-meta {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ---------- Loader ---------- */
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  transition: opacity 0.7s ease, visibility 0.7s;
+}
+
+.loader.done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader-name {
+  font-size: clamp(26px, 5vw, 44px);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.loader-name span {
+  color: var(--accent);
+}
+
+.loader-bar {
+  width: min(320px, 70vw);
+  height: 2px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+
+.loader-bar-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 0.35s ease-out;
+}
+
+.loader-status {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.loader-btn {
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 12px 30px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, opacity 0.2s;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.loader-btn.show {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.4s, transform 0.4s, background 0.2s, color 0.2s;
+}
+
+.loader-btn:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.station-wrap {
+  transition: opacity 0.35s;
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .hud-scroll-thumb {
+    animation: none;
+  }
+
+  .loader,
+  .loader-btn {
+    transition: none;
+  }
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 640px) {
+  .hud {
+    padding: 16px;
+  }
+
+  .hud-nav {
+    display: none;
+  }
+
+  .panel {
+    padding: 16px 18px;
+  }
+
+  .panel h2 {
+    font-size: 19px;
+  }
+}
