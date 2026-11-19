@@ -1,68 +1,87 @@
-import { useEffect, useRef } from "react";
+import { config } from "../config";
+import { STATIONS } from "../lib/stations";
 
-/**
- * Scroll-coupled HUD: nav aktif mengikuti scroll, thumb progress.
- * Semua ukuran dari live DOM (getBoundingClientRect), bukan callback animasi.
- */
-const SECTIONS = ["home", "about", "skills", "projects", "experience", "contact"] as const;
+interface HudProps {
+  activeStation: number;
+  scrollProgress: number;
+  onSelectStation: (index: number) => void;
+}
 
-const Hud = ({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) => {
-  const navRef = useRef<HTMLElement>(null);
-  const thumbRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let raf = 0;
-    const loop = () => {
-      const el = containerRef.current;
-      if (el) {
-        const total = el.scrollHeight - window.innerHeight;
-        const y = window.scrollY;
-        const p = total > 0 ? Math.min(1, Math.max(0, y / total)) : 0;
-        if (thumbRef.current) thumbRef.current.style.transform = `scaleY(${p})`;
-
-        // section aktif = stasiun terdekat (home di 0, tiap stasiun +1)
-        const idx = Math.min(SECTIONS.length - 1, Math.round(p * SECTIONS.length));
-        const btns = navRef.current?.querySelectorAll("button");
-        btns?.forEach((b, i) => b.classList.toggle("active", i === idx));
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [containerRef]);
-
-  const jump = (i: number) => {
-    const el = containerRef.current;
-    if (!el) return;
-    const total = el.scrollHeight - window.innerHeight;
-    const target = (i / SECTIONS.length) * total;
-    window.scrollTo({ top: target, behavior: "smooth" });
-  };
+const Hud = ({ activeStation, scrollProgress, onSelectStation }: HudProps) => {
+  const current = STATIONS[activeStation] ?? STATIONS[0];
 
   return (
-    <header className="hud">
-      <div className="hud-top">
-        <div className="hud-name">
-          AHMAD<span>KURNIAWAN</span>
+    <div className="hud">
+      <header className="hud-top">
+        <button
+          type="button"
+          className="hud-brand"
+          onClick={() => onSelectStation(0)}
+          aria-label="Ahmad Kurniawan home"
+        >
+          <span className="hud-brand-main">{config.brand.prefix}</span>
+          <span className="hud-brand-sub">{config.brand.suffix}</span>
+        </button>
+
+        <nav className="hud-nav" aria-label="Portfolio sections">
+          {STATIONS.map((station, i) => {
+            const isActive = i === activeStation;
+            return (
+              <button
+                key={station.id}
+                type="button"
+                className={`hud-nav-btn${isActive ? " active" : ""}`}
+                onClick={() => onSelectStation(i)}
+                aria-current={isActive ? "page" : undefined}
+              >
+                {station.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <a
+          className="hud-cta"
+          href={`mailto:${config.contact.mail}`}
+          aria-label="Send email to Ahmad Kurniawan"
+        >
+          <span>Let&apos;s talk</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </header>
+
+      <footer className="hud-bottom">
+        <div className="hud-hint">
+          <span className="hud-hint-desktop">Drag to look · Scroll to explore</span>
+          <span className="hud-hint-mobile">Swipe or tap sections to explore</span>
         </div>
-        <nav className="hud-nav" ref={navRef} aria-label="Portfolio sections">
-          {SECTIONS.map((s, i) => (
-            <button key={s} onClick={() => jump(i)}>
-              {s}
+
+        <nav className="hud-mobile-nav" aria-label="Mobile sections">
+          {STATIONS.map((station, i) => (
+            <button
+              key={station.id}
+              type="button"
+              className={`hud-mobile-btn${i === activeStation ? " active" : ""}`}
+              onClick={() => onSelectStation(i)}
+            >
+              {station.label}
             </button>
           ))}
         </nav>
-      </div>
-      <div className="hud-bottom">
-        <div className="hud-hint">Drag to orbit · Scroll to travel</div>
-        <div className="hud-scroll">
-          <div className="hud-scroll-track">
-            <div className="hud-scroll-thumb" ref={thumbRef} />
+
+        <div className="hud-progress-wrap">
+          <span className="hud-station-counter tabular-nums">
+            {current.indexLabel} / 0{STATIONS.length - 1}
+          </span>
+          <div className="hud-progress-track" aria-hidden="true">
+            <div
+              className="hud-progress-fill"
+              style={{ transform: `scaleX(${Math.max(0.06, scrollProgress)})` }}
+            />
           </div>
-          <span>Scroll</span>
         </div>
-      </div>
-    </header>
+      </footer>
+    </div>
   );
 };
 

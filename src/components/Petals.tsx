@@ -3,24 +3,24 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 /**
- * Petals instanced: satu InstancedMesh, animasi murni di useFrame.
- * Count di-cap untuk low-end (hardwareConcurrency <= 4).
+ * Ambient platinum dust motes / geometric micro-shards drifting through the obsidian corridor.
+ * Uses a single InstancedMesh with zero per-frame allocations.
  */
 const Petals = ({ count }: { count: number }) => {
   const ref = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  const petals = useMemo(
+  const motes = useMemo(
     () =>
-      Array.from({ length: count }, () => ({
-        x: (Math.random() - 0.5) * 26,
-        y: Math.random() * 12 - 2,
-        z: (Math.random() - 0.5) * 16 - 4,
-        fall: 0.35 + Math.random() * 0.55,
-        sway: 0.6 + Math.random() * 1.2,
-        phase: Math.random() * Math.PI * 2,
-        spin: (Math.random() - 0.5) * 2,
-        scale: 0.05 + Math.random() * 0.06,
+      Array.from({ length: count }, (_, i) => ({
+        x: (Math.sin(i * 12.9898) * 0.5) * 24,
+        y: ((i * 0.618) % 1) * 7 - 0.8,
+        z: -((i / count) * 76) + 8,
+        drift: 0.15 + ((i * 7) % 10) * 0.025,
+        sway: 0.35 + ((i * 3) % 10) * 0.06,
+        phase: (i * 1.37) % (Math.PI * 2),
+        spin: (((i % 5) - 2) * 0.35) || 0.25,
+        scale: 0.025 + ((i * 11) % 10) * 0.004,
       })),
     [count],
   );
@@ -29,12 +29,12 @@ const Petals = ({ count }: { count: number }) => {
     const mesh = ref.current;
     if (!mesh) return;
     const t = state.clock.elapsedTime;
-    for (let i = 0; i < petals.length; i++) {
-      const p = petals[i];
-      const y = 6.5 - (((t * p.fall + p.phase) % 9) + 9) % 9;
-      dummy.position.set(p.x + Math.sin(t * p.sway + p.phase) * 1.4, y, p.z);
-      dummy.rotation.set(t * p.spin + p.phase, p.phase, t * p.spin * 0.7);
-      dummy.scale.setScalar(p.scale);
+    for (let i = 0; i < motes.length; i++) {
+      const m = motes[i];
+      const y = -0.8 + (((m.y + t * m.drift) % 7.2) + 7.2) % 7.2;
+      dummy.position.set(m.x + Math.sin(t * m.sway + m.phase) * 0.6, y, m.z);
+      dummy.rotation.set(t * m.spin + m.phase, t * m.spin * 0.6, m.phase);
+      dummy.scale.setScalar(m.scale);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     }
@@ -43,8 +43,14 @@ const Petals = ({ count }: { count: number }) => {
 
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, count]} frustumCulled={false}>
-      <planeGeometry args={[1, 0.7]} />
-      <meshStandardMaterial color="#d98ba0" side={THREE.DoubleSide} roughness={0.9} />
+      <octahedronGeometry args={[1, 0]} />
+      <meshStandardMaterial
+        color="#e4e4e7"
+        emissive="#a1a1aa"
+        emissiveIntensity={0.35}
+        roughness={0.25}
+        metalness={0.8}
+      />
     </instancedMesh>
   );
 };

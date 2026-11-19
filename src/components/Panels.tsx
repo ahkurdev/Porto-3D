@@ -1,131 +1,465 @@
+import { useState } from "react";
 import { config } from "../config";
+import { STATIONS } from "../lib/stations";
 
-/**
- * Content panels + waypoints yang di-spawn sebagai JSX di dalam Canvas
- * lewat <Html> dari drei. Posisi diselaraskan dengan keyframe kamera di Scene.
- */
-export const STATIONS = [
-  { name: "about", z: -14 },
-  { name: "skills", z: -28 },
-  { name: "projects", z: -42 },
-  { name: "experience", z: -56 },
-  { name: "contact", z: -70 },
-] as const;
+interface PanelsProps {
+  activeStation: number;
+  activeWorkProject: number;
+  activeAboutTab: number;
+  activeStackCategory: number;
+  onSelectStation: (index: number) => void;
+  onSelectWorkProject: (projectIndex: number) => void;
+  onSelectAboutTab: (tabIndex: number) => void;
+  onSelectStackCategory: (catIndex: number) => void;
+}
 
-export type StationName = (typeof STATIONS)[number]["name"];
-
-export const PANEL_X = 2.2;
-
-const ProjectsPanel = () => (
-  <div className="panel contact-panel">
-    <div className="panel-kicker">01 · Selected work</div>
-    <h2>Shipped &amp; open code</h2>
-    {config.projects.map((p) => (
+const HomeHeroOverlay = ({ onExploreWork }: { onExploreWork: () => void }) => (
+  <section className="hero-overlay" aria-label="Introduction">
+    <div className="hero-meta-row">
+      <span>{config.home.kicker}</span>
+      <span aria-hidden="true">·</span>
+      <span>BASED IN {config.brand.locationShort}</span>
+      <span aria-hidden="true">·</span>
+      <span>{config.brand.platforms}</span>
+    </div>
+    <p className="hero-statement">{config.home.statement}</p>
+    <div className="hero-actions">
+      <button type="button" className="btn-primary" onClick={onExploreWork}>
+        <span>View selected work</span>
+        <span aria-hidden="true">↓</span>
+      </button>
       <a
-        key={p.name}
-        className="proj"
-        href={p.link}
+        className="btn-ghost"
+        href={config.contact.socials.github}
         target="_blank"
         rel="noreferrer noopener"
       >
-        <div className="proj-name">
-          {p.name}
-          <span className="arrow">↗</span>
-        </div>
-        <div className="proj-desc">{p.description}</div>
+        <span>GitHub</span>
+        <span aria-hidden="true">↗</span>
       </a>
-    ))}
-  </div>
-);
-
-const AboutPanel = () => (
-  <div className="panel">
-    <div className="panel-kicker">{config.about.kicker}</div>
-    <h2>
-      Systems that hold up
-      <br />
-      under real load
-    </h2>
-    <p>{config.about.lines.join(" ")}</p>
-    <p style={{ marginTop: 10 }}>
-      Foundation from live community platforms: real users, persistent data,
-      exploit pressure, performance problems that had to be solved in production.
-    </p>
-  </div>
-);
-
-const SkillsPanel = () => (
-  <div className="panel">
-    <div className="panel-kicker">02 · Toolbox</div>
-    <h2>Stack &amp; tools</h2>
-    {config.skills.map((s) => (
-      <div className="skill-row" key={s.name}>
-        <div className="skill-name">{s.name}</div>
-        <div className="skill-track">
-          <div className="skill-fill" style={{ width: `${s.level}%` }} />
-        </div>
-        <div className="skill-name" style={{ width: 34, textAlign: "right", color: "var(--ink-soft)" }}>
-          {s.level}
-        </div>
+      <div className="hero-stats tabular-nums">
+        {config.home.stats.map((s) => (
+          <div className="hero-stat" key={s.label}>
+            <strong>{s.value}</strong>
+            <span>{s.label}</span>
+          </div>
+        ))}
       </div>
-    ))}
-  </div>
+    </div>
+  </section>
 );
 
-const ExperiencePanel = () => (
-  <div className="panel" style={{ width: "min(460px, 88vw)" }}>
-    <div className="panel-kicker">03 · Systems work</div>
-    <h2>Under real load</h2>
-    {config.experience.map((x) => (
-      <div className="xp" key={`${x.period}-${x.place}`}>
-        <div className="xp-head">
-          <span className="xp-role">{x.role}</span>
-          <span className="xp-period">{x.period}</span>
+const WorkPanel = ({
+  activeWorkProject,
+  onSelectWorkProject,
+  onContinueToAbout,
+}: {
+  activeWorkProject: number;
+  onSelectWorkProject: (index: number) => void;
+  onContinueToAbout: () => void;
+}) => {
+  const project = config.projects[activeWorkProject] ?? config.projects[0];
+  const isLast = activeWorkProject === config.projects.length - 1;
+
+  return (
+    <section className="station-panel" aria-label="Selected work">
+      <div className="panel-header-row">
+        <div className="panel-header">
+          <div className="panel-kicker">01 / SELECTED WORK</div>
+          <h2>Software in practice.</h2>
         </div>
-        <div className="xp-place">{x.place}</div>
-        <div className="xp-detail">{x.detail}</div>
-        <div className="xp-tags">
-          {x.tags.map((t) => (
-            <span className="xp-tag" key={t}>
-              {t}
+        <span className="work-counter tabular-nums">
+          0{activeWorkProject + 1} / 0{config.projects.length}
+        </span>
+      </div>
+
+      <div className="segment-bar work-tabs" role="tablist" aria-label="Select project">
+        {config.projects.map((item, idx) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={idx === activeWorkProject}
+            className={`segment-btn${idx === activeWorkProject ? " active" : ""}`}
+            onClick={() => onSelectWorkProject(idx)}
+          >
+            <span className="segment-num">{item.num}</span>
+            <span className="segment-label">{item.name.replace("Pekon ", "")}</span>
+          </button>
+        ))}
+      </div>
+
+      <article className="project-detail">
+        <div className="project-meta-line">
+          <span>{project.num}</span>
+          <span aria-hidden="true">·</span>
+          <span>{project.category}</span>
+        </div>
+        <h3>{project.name}</h3>
+        <p className="project-tagline">{project.tagline}</p>
+        <p className="panel-body">{project.description}</p>
+
+        <div className="arch-box">
+          <div className="arch-head">
+            <span>{project.diagramTitle}</span>
+            <span className="arch-sub">{project.diagramSubtitle}</span>
+          </div>
+          <div className="arch-steps">
+            {project.flowSteps.map((step, idx) => (
+              <div className="arch-step" key={step}>
+                <span className="arch-step-text">{step}</span>
+                {idx < project.flowSteps.length - 1 && (
+                  <span className="arch-arrow" aria-hidden="true">
+                    →
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="inline-meta">{project.stack.join(" · ")}</div>
+
+        <div className="panel-actions">
+          <a
+            className="btn-primary"
+            href={project.link}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            <span>{project.linkLabel}</span>
+            <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() =>
+              isLast ? onContinueToAbout() : onSelectWorkProject(activeWorkProject + 1)
+            }
+          >
+            <span>
+              {isLast ? "Next: About" : `Next (${config.projects[activeWorkProject + 1].num})`}
             </span>
+            <span aria-hidden="true">↓</span>
+          </button>
+        </div>
+        {project.note && <span className="project-note">{project.note}</span>}
+      </article>
+    </section>
+  );
+};
+
+const AboutPanel = ({
+  activeAboutTab,
+  onSelectAboutTab,
+  onContinueToStack,
+}: {
+  activeAboutTab: number;
+  onSelectAboutTab: (tabIndex: number) => void;
+  onContinueToStack: () => void;
+}) => {
+  const isProfile = activeAboutTab === 0;
+
+  return (
+    <section className="station-panel" aria-label="About Ahmad Kurniawan">
+      <div className="panel-header-row">
+        <div className="panel-header">
+          <div className="panel-kicker">
+            {isProfile ? config.about.kicker : config.about.capabilitiesKicker}
+          </div>
+          <h2>
+            {isProfile ? config.about.heading : config.about.capabilitiesHeading}
+          </h2>
+        </div>
+        <span className="work-counter tabular-nums">0{activeAboutTab + 1} / 02</span>
+      </div>
+
+      <div className="segment-bar" role="tablist" aria-label="About sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isProfile}
+          className={`segment-btn${isProfile ? " active" : ""}`}
+          onClick={() => onSelectAboutTab(0)}
+        >
+          <span className="segment-num">01</span>
+          <span className="segment-label">Profile</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isProfile}
+          className={`segment-btn${!isProfile ? " active" : ""}`}
+          onClick={() => onSelectAboutTab(1)}
+        >
+          <span className="segment-num">02</span>
+          <span className="segment-label">Capabilities</span>
+        </button>
+      </div>
+
+      {isProfile ? (
+        <div className="about-copy">
+          <div className="id-strip">
+            <div>
+              <strong>{config.brand.fullName}</strong>
+              <span>{config.brand.role}</span>
+            </div>
+            <span className="id-badge">ID / 01</span>
+          </div>
+          {config.about.paragraphs.map((p, idx) => (
+            <p className="panel-body" key={idx}>
+              {p}
+            </p>
+          ))}
+          <div className="inline-meta">{config.about.tags.join(" · ")}</div>
+        </div>
+      ) : (
+        <div className="cap-grid">
+          {config.about.capabilities.map((cap) => (
+            <article className="cap-item" key={cap.num}>
+              <div className="cap-head">
+                <span className="cap-num">{cap.num}</span>
+                <h3>{cap.title}</h3>
+              </div>
+              <p>{cap.description}</p>
+            </article>
           ))}
         </div>
+      )}
+
+      <div className="panel-actions">
+        <button
+          type="button"
+          className="btn-ghost"
+          onClick={() => (isProfile ? onSelectAboutTab(1) : onContinueToStack())}
+        >
+          <span>{isProfile ? "Next (02 Capabilities)" : "Next: Stack"}</span>
+          <span aria-hidden="true">↓</span>
+        </button>
       </div>
-    ))}
-  </div>
-);
-
-const ContactPanel = () => (
-  <div className="panel contact-panel">
-    <div className="panel-kicker">04 · Contact</div>
-    <h2>Let&apos;s build something reliable</h2>
-    <p>
-      Open to freelance systems work, internships, and full-time roles where
-      reliability matters.
-    </p>
-    <div className="contact-links">
-      <a className="contact-link" href={`mailto:${config.contact.mail}`}>
-        Email
-      </a>
-      <a className="contact-link" href={config.contact.socials.github} target="_blank" rel="noreferrer noopener">
-        GitHub
-      </a>
-      <a className="contact-link" href={config.contact.socials.linkedin} target="_blank" rel="noreferrer noopener">
-        LinkedIn
-      </a>
-    </div>
-    <div className="contact-meta">
-      <span>Location — {config.contact.location}</span>
-      <span>Status — Available for projects</span>
-    </div>
-  </div>
-);
-
-export const PANELS: Record<StationName, () => React.ReactElement> = {
-  about: AboutPanel,
-  skills: SkillsPanel,
-  projects: ProjectsPanel,
-  experience: ExperiencePanel,
-  contact: ContactPanel,
+    </section>
+  );
 };
+
+const StackPanel = ({
+  activeStackCategory,
+  onSelectStackCategory,
+  onContinueToContact,
+}: {
+  activeStackCategory: number;
+  onSelectStackCategory: (catIndex: number) => void;
+  onContinueToContact: () => void;
+}) => {
+  const category = config.techCategories[activeStackCategory] ?? config.techCategories[0];
+  const isLast = activeStackCategory === config.techCategories.length - 1;
+
+  return (
+    <section className="station-panel" aria-label="Technology stack">
+      <div className="panel-header-row">
+        <div className="panel-header">
+          <div className="panel-kicker">04 / TECHNOLOGY</div>
+          <h2>A stack with purpose.</h2>
+        </div>
+        <span className="work-counter tabular-nums">
+          0{activeStackCategory + 1} / 0{config.techCategories.length}
+        </span>
+      </div>
+
+      <div className="segment-bar" role="tablist" aria-label="Technology categories">
+        {config.techCategories.map((cat, idx) => (
+          <button
+            key={cat.id}
+            type="button"
+            role="tab"
+            aria-selected={idx === activeStackCategory}
+            className={`segment-btn${idx === activeStackCategory ? " active" : ""}`}
+            onClick={() => onSelectStackCategory(idx)}
+          >
+            <span className="segment-num">{cat.num}</span>
+            <span className="segment-label">{cat.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="stack-body">
+        <div className="project-meta-line tabular-nums">
+          <span>MY TOOLKIT / {category.num}</span>
+          <span aria-hidden="true">·</span>
+          <span>{category.items.length} TECHNOLOGIES</span>
+        </div>
+        <h3>{category.label}</h3>
+        <p className="panel-body">{category.description}</p>
+
+        <ul className="tech-grid" aria-label={`${category.label} list`}>
+          {category.items.map((tech) => (
+            <li key={tech} className="tech-cell">
+              {tech}
+            </li>
+          ))}
+        </ul>
+
+        <div className="panel-actions">
+          <a
+            className="btn-ghost"
+            href={config.openSource.reposUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            <span>See my repositories</span>
+            <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() =>
+              isLast ? onContinueToContact() : onSelectStackCategory(activeStackCategory + 1)
+            }
+          >
+            <span>
+              {isLast
+                ? "Next: Contact"
+                : `Next (${config.techCategories[activeStackCategory + 1].num})`}
+            </span>
+            <span aria-hidden="true">↓</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const ContactPanel = () => {
+  const [copiedKey, setCopiedKey] = useState<"email" | "discord" | null>(null);
+
+  const copyValue = async (value: string, key: "email" | "discord") => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(key);
+      window.setTimeout(() => {
+        setCopiedKey((prev) => (prev === key ? null : prev));
+      }, 2000);
+    } catch {
+      setCopiedKey(key);
+    }
+  };
+
+  return (
+    <section className="station-panel" aria-label="Contact information">
+      <div className="panel-header">
+        <div className="panel-kicker">{config.contact.kicker}</div>
+        <h2>{config.contact.heading}</h2>
+      </div>
+
+      <p className="panel-body">{config.contact.description}</p>
+      <div className="inline-meta">
+        <span>{config.brand.status}</span>
+        <span aria-hidden="true">·</span>
+        <span>{config.contact.location}</span>
+      </div>
+
+      <div className="contact-rows">
+        <div className="contact-row">
+          <a className="contact-value" href={`mailto:${config.contact.mail}`}>
+            {config.contact.mail}
+          </a>
+          <button
+            type="button"
+            className="copy-btn"
+            onClick={() => copyValue(config.contact.mail, "email")}
+            aria-label="Copy email address"
+          >
+            {copiedKey === "email" ? "Copied" : "Copy email"}
+          </button>
+        </div>
+
+        <div className="contact-row">
+          <span className="contact-value">Discord: {config.contact.discord}</span>
+          <button
+            type="button"
+            className="copy-btn"
+            onClick={() => copyValue(config.contact.discord, "discord")}
+            aria-label="Copy Discord username"
+          >
+            {copiedKey === "discord" ? "Copied" : "Copy Discord"}
+          </button>
+        </div>
+      </div>
+
+      <div className="social-links">
+        <a
+          className="btn-ghost"
+          href={config.contact.socials.github}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          <span>GitHub</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+        <a
+          className="btn-ghost"
+          href={config.contact.socials.instagram}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          <span>Instagram</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+        <a
+          className="btn-ghost"
+          href={config.contact.socials.linkedin}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          <span>LinkedIn</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </section>
+  );
+};
+
+const Panels = ({
+  activeStation,
+  activeWorkProject,
+  activeAboutTab,
+  activeStackCategory,
+  onSelectStation,
+  onSelectWorkProject,
+  onSelectAboutTab,
+  onSelectStackCategory,
+}: PanelsProps) => {
+  const station = STATIONS[activeStation] ?? STATIONS[0];
+
+  if (station.id === "home") {
+    return <HomeHeroOverlay onExploreWork={() => onSelectStation(1)} />;
+  }
+
+  return (
+    <div className="station-panel-slot" data-station={station.id}>
+      {station.id === "work" && (
+        <WorkPanel
+          activeWorkProject={activeWorkProject}
+          onSelectWorkProject={onSelectWorkProject}
+          onContinueToAbout={() => onSelectStation(2)}
+        />
+      )}
+      {station.id === "about" && (
+        <AboutPanel
+          activeAboutTab={activeAboutTab}
+          onSelectAboutTab={onSelectAboutTab}
+          onContinueToStack={() => onSelectStation(3)}
+        />
+      )}
+      {station.id === "stack" && (
+        <StackPanel
+          activeStackCategory={activeStackCategory}
+          onSelectStackCategory={onSelectStackCategory}
+          onContinueToContact={() => onSelectStation(4)}
+        />
+      )}
+      {station.id === "contact" && <ContactPanel />}
+    </div>
+  );
+};
+
+export default Panels;

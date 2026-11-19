@@ -1,224 +1,287 @@
-import { useMemo, useRef } from "react";
-import { Html } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
-import { config } from "./config";
-import { HomeText, StationText, Ground } from "./components/Text3DHelpers";
-import { STATIONS, PANELS, PANEL_X } from "./components/Panels";
+import { useEffect, useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import * as THREE from "three";
+import { HomeText, StationText, Ground, CorridorPillars } from "./components/Text3DHelpers";
+import { StationMonument } from "./components/Monuments";
+import { GlbArchitectCore } from "./components/GlbArchitectCore";
+import {
+  CorridorDataStreams,
+  CorridorPortals,
+  SkyAtmosphere,
+  StationPulseRing,
+  VolumetricBeam,
+} from "./components/AtmosphericEffects";
 import Petals from "./components/Petals";
+import StudioEnvironment from "./components/StudioEnvironment";
+import { STATIONS, getCameraPoseForProgress, getStationIndexFromProgress } from "./lib/stations";
 
-const SECTION_LEN = 14; // jarak antar stasiun di sumbu Z
+const _lookVec = new THREE.Vector3();
 
-/** Monumen geometris per stasiun — identitas visual tiap section. */
-const Monument = ({ variant, position }: { variant: number; position: [number, number, number] }) => {
-  const mat = <meshStandardMaterial color="#2f5d50" roughness={0.4} metalness={0.2} />;
-  const stone = <meshStandardMaterial color="#dcdcd4" roughness={0.85} />;
-  const shapes = [
-    // about: torus knot
-    <mesh key="k" position={position} castShadow>
-      <torusKnotGeometry args={[0.62, 0.22, 128, 20]} />
-      {mat}
-    </mesh>,
-    // skills: bar chart 3D
-    <group key="b" position={position}>
-      {config.skills.slice(0, 5).map((s, i) => (
-        <mesh key={s.name} position={[(i - 2) * 0.42, (s.level / 100) * 0.9 - 0.45, 0]} castShadow>
-          <boxGeometry args={[0.26, (s.level / 100) * 1.8, 0.26]} />
-          {i === 0 ? mat : stone}
-        </mesh>
-      ))}
-    </group>,
-    // projects: kubus berlapis
-    <group key="c" position={position}>
-      <mesh castShadow>
-        <boxGeometry args={[1.15, 1.15, 1.15]} />
-        {mat}
-      </mesh>
-      <mesh rotation={[0.5, 0.6, 0.2]} castShadow>
-        <boxGeometry args={[1.6, 0.16, 0.5]} />
-        {stone}
-      </mesh>
-    </group>,
-    // experience: pilar bertingkat
-    <group key="p" position={position}>
-      {[0.9, 0.65, 0.4].map((s, i) => (
-        <mesh key={s} position={[0, -0.6 + i * 0.55, 0]} castShadow>
-          <cylinderGeometry args={[s * 0.5, s * 0.62, 0.5, 6]} />
-          {i === 2 ? mat : stone}
-        </mesh>
-      ))}
-    </group>,
-    // contact: cincin + inti
-    <group key="r" position={position}>
-      <mesh castShadow>
-        <torusGeometry args={[0.75, 0.1, 24, 64]} />
-        {mat}
-      </mesh>
-      <mesh castShadow>
-        <icosahedronGeometry args={[0.3, 0]} />
-        {stone}
-      </mesh>
-    </group>,
-  ];
-  return <>{shapes[variant % shapes.length]}</>;
-};
+interface SceneProps {
+  isMobile: boolean;
+  isSoftwareGl: boolean;
+  activeWorkProject: number;
+  activeAboutTab: number;
+  activeStackCategory: number;
+  scrollProgressRef: React.MutableRefObject<number>;
+  scrollSpeedRef: React.MutableRefObject<number>;
+  onActiveStationChange: (index: number) => void;
+}
 
-/** Pohon low-poly baris jalan. */
-const Tree = ({ position }: { position: [number, number, number] }) => (
-  <group position={position}>
-    <mesh position-y={0.45} castShadow>
-      <cylinderGeometry args={[0.06, 0.09, 0.9, 6]} />
-      <meshStandardMaterial color="#7a6a55" roughness={1} />
-    </mesh>
-    <mesh position-y={1.25} castShadow>
-      <coneGeometry args={[0.42, 1.1, 7]} />
-      <meshStandardMaterial color="#8fae94" roughness={0.9} />
-    </mesh>
-    <mesh position-y={1.85} castShadow>
-      <coneGeometry args={[0.28, 0.8, 7]} />
-      <meshStandardMaterial color="#9dbca2" roughness={0.9} />
-    </mesh>
-  </group>
-);
-
-const Trees = ({ isMobile }: { isMobile: boolean }) => {
-  const trees = useMemo(() => {
-    const arr: [number, number, number][] = [];
-    const step = isMobile ? 7 : 5;
-    for (let z = 4; z > -84; z -= step) {
-      arr.push([-4.6, -1.3, z]);
-      arr.push([4.6, -1.3, z - step / 2]);
-    }
-    return arr;
-  }, [isMobile]);
-  return (
-    <>
-      {trees.map((p, i) => (
-        <Tree key={i} position={p} />
-      ))}
-    </>
-  );
-};
-
-const Scene = ({ isMobile }: { isMobile: boolean }) => {
-  const camBase = useRef({ x: 0, y: 1.4, z: 5 });
+const Scene = ({
+  isMobile,
+  isSoftwareGl,
+  activeWorkProject,
+  activeAboutTab,
+  activeStackCategory,
+  scrollProgressRef,
+  scrollSpeedRef,
+  onActiveStationChange,
+}: SceneProps) => {
+  const { gl, invalidate } = useThree();
+  const smoothProgress = useRef(0);
   const parallax = useRef({ x: 0, y: 0 });
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const targetDrag = useRef({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const lastPointer = useRef({ x: 0, y: 0 });
+  const lastReportedStation = useRef(-1);
+  const pacerBusy = useRef(false);
+  const accentLightRef = useRef<THREE.PointLight>(null);
 
-  // GSAP timeline: kamera terbang melewati stasiun (scrub).
-  useGSAPScene(camBase);
+  // Software-WebGL frame pacing using WebGL fenceSync + cooldown
+  useEffect(() => {
+    if (!isSoftwareGl) return;
+    let cancelled = false;
+    let timerId = 0;
 
-  // Mouse parallax di frame loop — menumpuk di atas posisi GSAP.
-  const wraps = useRef<HTMLElement[]>([]);
+    const scheduleNext = () => {
+      if (cancelled || pacerBusy.current) return;
+      pacerBusy.current = true;
+      const ctx = gl.getContext() as WebGL2RenderingContext;
+      const sync =
+        typeof ctx.fenceSync === "function"
+          ? ctx.fenceSync(ctx.SYNC_GPU_COMMANDS_COMPLETE, 0)
+          : null;
+      ctx.flush();
 
-  useFrame((state) => {
-    const cam = state.camera;
-    const nx = state.pointer.x;
-    const ny = state.pointer.y;
-    parallax.current.x += (nx * 0.7 - parallax.current.x) * 0.05;
-    parallax.current.y += (ny * 0.35 - parallax.current.y) * 0.05;
-    cam.position.set(
-      camBase.current.x + parallax.current.x,
-      camBase.current.y + parallax.current.y,
-      camBase.current.z,
-    );
-    cam.lookAt(camBase.current.x + parallax.current.x * 0.4, 1.1, camBase.current.z - 8);
-    (window as unknown as Record<string, number>).__camZ = camBase.current.z;
+      const poll = () => {
+        if (cancelled) {
+          if (sync) ctx.deleteSync(sync);
+          return;
+        }
+        const status = sync ? ctx.getSyncParameter(sync, ctx.SYNC_STATUS) : ctx.SIGNALED;
+        if (status === ctx.UNSIGNALED) {
+          timerId = window.setTimeout(poll, 8);
+        } else {
+          if (sync) ctx.deleteSync(sync);
+          timerId = window.setTimeout(() => {
+            pacerBusy.current = false;
+            if (!cancelled) invalidate();
+          }, 95);
+        }
+      };
+      timerId = window.setTimeout(poll, 8);
+    };
 
-    // Panel visibility per-frame dari posisi kamera live (DOM langsung).
-    if (wraps.current.length === 0) {
-      wraps.current = Array.from(document.querySelectorAll<HTMLElement>(".station-wrap"));
+    const onScrollOrResize = () => {
+      if (!cancelled) invalidate();
+    };
+
+    invalidate();
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize, { passive: true });
+
+    const kick = window.setInterval(() => {
+      if (!pacerBusy.current && !cancelled) {
+        scheduleNext();
+      }
+    }, 110);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+      window.clearInterval(kick);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [gl, invalidate, isSoftwareGl]);
+
+  // Pointer drag-to-look without fighting scroll camera travel
+  useEffect(() => {
+    const dom = gl.domElement;
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      isDragging.current = true;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!isDragging.current) return;
+      const dx = (e.clientX - lastPointer.current.x) / Math.max(window.innerWidth, 1);
+      const dy = (e.clientY - lastPointer.current.y) / Math.max(window.innerHeight, 1);
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      targetDrag.current.x = THREE.MathUtils.clamp(targetDrag.current.x - dx * 2.2, -1.4, 1.4);
+      targetDrag.current.y = THREE.MathUtils.clamp(targetDrag.current.y + dy * 1.2, -0.55, 0.75);
+      if (isSoftwareGl) invalidate();
+    };
+    const onUp = () => {
+      isDragging.current = false;
+    };
+
+    dom.addEventListener("pointerdown", onDown);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      dom.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [gl, invalidate, isSoftwareGl]);
+
+  useFrame((state, delta) => {
+    const dt = Math.min(delta, isSoftwareGl ? 0.14 : 0.08);
+    const prevSmooth = smoothProgress.current;
+
+    if (isSoftwareGl && Math.abs(smoothProgress.current - scrollProgressRef.current) > 0.02) {
+      smoothProgress.current = THREE.MathUtils.lerp(
+        smoothProgress.current,
+        scrollProgressRef.current,
+        0.72,
+      );
+    } else {
+      smoothProgress.current = THREE.MathUtils.damp(
+        smoothProgress.current,
+        scrollProgressRef.current,
+        isSoftwareGl ? 22 : 8,
+        dt,
+      );
     }
-    for (let i = 0; i < STATIONS.length; i++) {
-      const el = wraps.current[i];
-      if (!el) continue;
-      // stasiun i dilihat pas kamera di z = -14*(i+1)+5; visible jika kamera dekat
-      const dist = Math.abs(camBase.current.z - (-SECTION_LEN * (i + 1) + 5));
-      const vis = dist < 7;
-      el.style.visibility = vis ? "visible" : "hidden";
-      el.style.opacity = vis ? "1" : "0";
+
+    // Track scroll velocity for kinetic corridor streaks & subtle camera FOV breath
+    const instantSpeed = dt > 0.0001 ? Math.abs(smoothProgress.current - prevSmooth) / dt : 0;
+    scrollSpeedRef.current = THREE.MathUtils.damp(scrollSpeedRef.current, instantSpeed, 6, dt);
+
+    const activeIdx = getStationIndexFromProgress(
+      isSoftwareGl ? scrollProgressRef.current : smoothProgress.current,
+    );
+    if (activeIdx !== lastReportedStation.current) {
+      lastReportedStation.current = activeIdx;
+      onActiveStationChange(activeIdx);
+    }
+
+    if (!isDragging.current) {
+      targetDrag.current.x = THREE.MathUtils.damp(targetDrag.current.x, 0, 2.2, dt);
+      targetDrag.current.y = THREE.MathUtils.damp(targetDrag.current.y, 0, 2.2, dt);
+    }
+    dragOffset.current.x = THREE.MathUtils.damp(dragOffset.current.x, targetDrag.current.x, 8, dt);
+    dragOffset.current.y = THREE.MathUtils.damp(dragOffset.current.y, targetDrag.current.y, 8, dt);
+
+    parallax.current.x = THREE.MathUtils.damp(parallax.current.x, state.pointer.x * 0.42, 4.5, dt);
+    parallax.current.y = THREE.MathUtils.damp(parallax.current.y, state.pointer.y * 0.22, 4.5, dt);
+
+    const pose = getCameraPoseForProgress(smoothProgress.current);
+    const mobileActive = isMobile && activeIdx > 0;
+    const mobileXOffset = isMobile ? -pose.x : 0;
+    const mobileLookXOffset = isMobile ? -pose.lookX : 0;
+    const mobileZPull = mobileActive ? 2.1 : isMobile ? 1.4 : 0;
+    const mobileYShift = mobileActive ? -0.35 : 0;
+    const mobileLookYShift = mobileActive ? -0.95 : 0;
+
+    state.camera.position.set(
+      pose.x + mobileXOffset + parallax.current.x + dragOffset.current.x,
+      pose.y + mobileYShift + parallax.current.y + dragOffset.current.y,
+      pose.z + mobileZPull,
+    );
+
+    _lookVec.set(
+      pose.lookX + mobileLookXOffset + parallax.current.x * 0.24,
+      pose.lookY + mobileLookYShift,
+      pose.lookZ,
+    );
+    state.camera.lookAt(_lookVec);
+
+    // Subtle interactive metallic glint light tracking camera + pointer
+    if (accentLightRef.current) {
+      accentLightRef.current.position.set(
+        pose.lookX + parallax.current.x * 4.5,
+        2.4 + parallax.current.y * 2.2,
+        pose.z - 2.4,
+      );
     }
   });
 
+  const monumentX = isMobile ? 0 : -2.05;
+
   return (
     <>
-      <fog attach="fog" args={["#f4f4f0", 12, 46]} />
-      <color attach="background" args={["#f4f4f0"]} />
-      <ambientLight intensity={0.85} />
+      <color attach="background" args={["#050608"]} />
+      <fog attach="fog" args={["#050608", 12, 42]} />
+
+      <SkyAtmosphere />
+      <StudioEnvironment />
+
+      {/* Warm/cool architectural 3-point studio rig + interactive glint point light */}
+      <hemisphereLight args={["#dbeafe", "#09090d", 0.78]} />
       <directionalLight
-        castShadow={!isMobile}
-        position={[6, 12, 4]}
-        intensity={1.15}
-        shadow-mapSize-width={isMobile ? 512 : 2048}
-        shadow-mapSize-height={isMobile ? 512 : 2048}
+        castShadow={!isMobile && !isSoftwareGl}
+        position={[7, 12, 6]}
+        intensity={1.9}
+        color="#fff7ed"
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-camera-near={0.5}
-        shadow-camera-far={60}
-        shadow-camera-left={-16}
-        shadow-camera-right={16}
-        shadow-camera-top={16}
-        shadow-camera-bottom={-16}
-        shadow-bias={-0.0002}
+        shadow-camera-far={55}
+        shadow-camera-left={-12}
+        shadow-camera-right={12}
+        shadow-camera-top={12}
+        shadow-camera-bottom={-12}
+        shadow-bias={-0.0004}
       />
+      <directionalLight position={[-7, 5, -9]} intensity={1.05} color="#bfdbfe" />
+      <pointLight ref={accentLightRef} intensity={4.5} distance={14} decay={2} color="#e0f2fe" />
+
       <Ground />
-      <Trees isMobile={isMobile} />
-      <Petals count={isMobile ? 40 : 140} />
+      <CorridorPillars isMobile={isMobile} />
+      <CorridorPortals />
+      <CorridorDataStreams count={isMobile ? 24 : 56} scrollSpeedRef={scrollSpeedRef} />
+      <Petals count={isMobile ? 44 : 120} />
 
-      <HomeText />
+      {/* Station 0: Hero GLB Kinetic Core + Volumetric Beam + Telemetry Pulse Floor */}
+      <GlbArchitectCore position={[0, -0.05, -4.8]} />
+      <VolumetricBeam position={[0, 0, -4.8]} radiusTop={0.8} radiusBottom={2.9} height={9.2} phase={0} />
+      <StationPulseRing position={[0, 0, -4.8]} phase={0} />
+      <HomeText isMobile={isMobile} />
 
-      {STATIONS.map((st, i) => {
-        const Panel = PANELS[st.name];
-        const z = -SECTION_LEN * (i + 1);
+      {/* Stations 1..4: Multi-GLB & Reactive Sculptures + Volumetric Beams + GLSL Pulse Rings */}
+      {STATIONS.slice(1).map((st, idx) => {
+        const stationKey = st.id as "work" | "about" | "stack" | "contact";
         return (
-          <group key={st.name}>
-            <Monument variant={i} position={[PANEL_X > 0 ? -PANEL_X : 2.6, 0.9, z]} />
-            <StationText text={st.name.toUpperCase()} position={[-PANEL_X, 2.6, z]} accent={i % 2 === 1} />
-            <group position={[PANEL_X, 1.55, z]}>
-              <Html
-                transform
-                distanceFactor={6}
-                pointerEvents="auto"
-                zIndexRange={[3, 0]}
-                wrapperClass="station-wrap"
-              >
-                <Panel />
-              </Html>
-            </group>
+          <group key={st.id}>
+            <StationMonument
+              stationId={stationKey}
+              position={[monumentX, 0.1, st.z]}
+              activeWorkProject={activeWorkProject}
+              activeAboutTab={activeAboutTab}
+              activeStackCategory={activeStackCategory}
+            />
+            <VolumetricBeam
+              position={[monumentX, 0, st.z]}
+              radiusTop={0.55}
+              radiusBottom={2.3}
+              height={8.2}
+              phase={(idx + 1) * 1.1}
+            />
+            <StationPulseRing position={[monumentX, 0, st.z]} phase={(idx + 1) * 0.22} />
+            <StationText
+              text={`${st.indexLabel} / ${st.label.toUpperCase()}`}
+              position={[monumentX, isMobile ? 2.15 : 2.38, st.z]}
+              scale={isMobile ? 0.72 : 0.92}
+            />
           </group>
         );
       })}
     </>
   );
 };
-
-/** Timeline scroll: kamera terbang melewati stasiun. */
-import { useGSAP } from "@gsap/react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-
-gsap.registerPlugin(ScrollTrigger);
-
-function useGSAPScene(camBase: React.RefObject<{ x: number; y: number; z: number }>) {
-  useGSAP(() => {
-    const total = STATIONS.length;
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: "#scroll-parent",
-        start: "top top",
-        end: "bottom bottom",
-        scrub: 0.6,
-      },
-      defaults: { ease: "none" },
-    });
-
-    // tiap section: maju satu stasiun + sedikit sway lateral bergantian
-    for (let i = 0; i < total; i++) {
-      const z = -SECTION_LEN * (i + 1) + 5;
-      tl.to(camBase.current, {
-        z,
-        x: i % 2 === 0 ? -0.9 : 0.9,
-        y: 1.4 + (i % 3) * 0.25,
-        duration: 1,
-      });
-    }
-  });
-}
 
 export default Scene;
